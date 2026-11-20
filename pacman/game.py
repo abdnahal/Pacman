@@ -60,6 +60,19 @@ class Game:
             self.state = STATE_MENU
             return
         self.maze = maze
+        self.tile_size = min(
+            80,
+            max(
+                24,
+                1000 // level["width"],
+                700 // level["height"],
+            ),
+        )
+        self.display.set_logical_size(
+            level["width"] * self.tile_size,
+            level["height"] * self.tile_size,
+            self.tile_size,
+        )
         self.player = Player(
             *self._find_center_spawn(maze),
             self.tile_size / 0.30,
@@ -174,6 +187,8 @@ class Game:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+                elif event.type == pygame.VIDEORESIZE:
+                    self.display.resize(event.w, event.h)
                 elif self.state == STATE_MENU:
                     self.handle_menu(event)
                 elif self.state == STATE_GAME:
@@ -192,5 +207,5 @@ class Game:
                 self.draw_name()
             else:
                 self.draw_menu()
-            pygame.display.flip()
+            self.display.present()
         pygame.quit()
