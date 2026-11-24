@@ -10,6 +10,6 @@
   "seed": 42,
   "cheat_mode": true,
   "levels": [
-    {"width": 25, "height": 15, "seed": 42}
+    {"width": 50, "height": 25, "seed": 42}
   ]
 }
