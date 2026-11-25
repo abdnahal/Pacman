@@ -1,0 +1,2 @@
+class GhostAI:
+    pass

@@ -1,5 +1,5 @@
 from .types import Direction, MazeGrid, Position
-from .game import MazeError
+from .maze import MazeError
 from typing import List
 from collections import deque
 
@@ -13,15 +13,19 @@ class Level:
         self.height = len(maze)
         if self.width == 0 or self.height == 0:
             raise MazeError("Width and height should be positive!")
-        equal = all(True for row in maze if len(row) == self.width)
-        if not equal:
-            raise MazeError("Invalid row detected, \
-rows should have the same size!")
-        for row in self.maze:
-            cells = all(True for cell in row if 15 >= cell >= 0)
-            if not cells:
-                raise MazeError("Invalid Maze cells detected!")
+        if not all(len(row) == self.width for row in maze):
+            raise MazeError("Rows must have the same size")
+
+        for row in maze:
+            if not all(type(cell) is int and 0 <= cell <= 15 for cell in row):
+                raise MazeError("Cells must be integers between 0 and 15")
+
         self.collectible = set()
+        self.player_spawn = self._find_center_spawn(self.maze)
+        self.reachable = self.reachable_from(self.player_spawn)
+        self.ghost_spawn = self._get_corners()
+        self.super_pacgums = set(self.ghost_spawn)
+        self.pacgums: set[Position] = (self.reachable - self.super_pacgums)
 
     def in_bounds(self, position: Position) -> bool:
         x, y = position
@@ -38,10 +42,11 @@ rows should have the same size!")
             return False
         x, y = position
         dx, dy = direction.delta
+        if (not self.in_bounds((x + dx, y + dy))
+                or not self.is_walk((x + dx, y + dy))):
+            return False
         source_cell = self.maze[y][x]
         destination_cell = self.maze[dy + y][dx + x]
-        if not self.in_bounds((dx, dy)) or not self.is_walk((dx, dy)):
-            return False
         source_blocked = source_cell & direction.wall_bit
         destination_blocked = destination_cell & direction.opposite().wall_bit
         if source_blocked or destination_blocked:
@@ -56,3 +61,76 @@ rows should have the same size!")
                 x, y = position
                 jiran.append((dx + x, dy + y))
         return jiran
+
+    def reachable_from(self, start: Position) -> set[Position]:
+        if not self.is_walk(start):
+            return set()
+
+        queue = deque([start])
+        visited = set([start])
+
+        while queue:
+            pos = queue.popleft()
+            for neighbor in self.neighbors(pos):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+        return visited
+
+    def _get_corners(self) -> List[Position]:
+        targets = [
+            (0, 0),
+            (self.width - 1, 0),
+            (0, self.height - 1),
+            (self.width - 1, self.height - 1),
+        ]
+        corners = []
+        available = self.reachable.copy()
+        if len(available) < 4:
+            raise MazeError("Need four reachable cells for ghost spawns")
+        for target in targets:
+            if target in self.reachable:
+                chosen = target
+            else:
+                chosen = min(available, key=lambda pos: (abs(
+                    target[0] - pos[0]) + abs(target[1] - pos[1])))
+            corners.append(chosen)
+            available.remove(chosen)
+        if len(corners) != 4:
+            raise MazeError("Insufficient corners for ghost spawn!")
+        return corners
+
+    def collect(self, position: Position) -> str | None:
+        if position in self.pacgums:
+            self.pacgums.remove(position)
+            return "normal"
+        elif position in self.super_pacgums:
+            self.super_pacgums.remove(position)
+            return 'super'
+        return None
+
+    def is_complete(self) -> bool:
+        return (not self.super_pacgums and not self.pacgums)
+
+    @staticmethod
+    def _find_center_spawn(maze) -> Position:
+        height = len(maze)
+        width = len(maze[0])
+        center_x = width // 2
+        center_y = height // 2
+        open_cells = [
+            (x, y)
+            for y in range(height)
+            for x in range(width)
+            if maze[y][x] != 15
+        ]
+        if not open_cells:
+            raise MazeError("Maze has no walkable player spawn")
+        return min(
+            open_cells,
+            key=lambda position: (
+                abs(position[0] - center_x) + abs(position[1] - center_y),
+                abs(position[0] - center_x),
+                abs(position[1] - center_y),
+            ),
+        )

@@ -3,6 +3,7 @@ from .display import Display, YELLOW, WHITE
 from .highscores import HighScoreStore
 from .maze import load_maze, MazeError
 from .player import Player
+from .level import Level
 
 
 STATE_MENU = "menu"
@@ -38,6 +39,7 @@ class Game:
             self.tile_size,
         )
         self.maze = None
+        self.level = None
         self.player = None
 
     def start_game(self):
@@ -45,20 +47,22 @@ class Game:
         self.score = 0
         self.lives = self.config["lives"]
         self.cheat_invincible = False
-        self.load_level()
-        if self.maze is not None:
+        if self.load_level():
             self.state = STATE_GAME
 
-    def load_level(self):
+    def load_level(self) -> bool:
         level = self.config["levels"][self.level_index]
         try:
             maze, entry, _ = load_maze(
                 level["width"], level["height"], level["seed"]
             )
+            self.level = Level(maze)
+            self.player = Player(*self.level.player_spawn,
+                                 self.tile_size / 0.30)
         except MazeError as exc:
             self.error_message = str(exc)
             self.state = STATE_MENU
-            return
+            return False
         self.maze = maze
         self.tile_size = min(
             80,
@@ -73,34 +77,8 @@ class Game:
             level["height"] * self.tile_size,
             self.tile_size,
         )
-        self.player = Player(
-            *self._find_center_spawn(maze),
-            self.tile_size / 0.30,
-        )
         self.error_message = ""
-
-    @staticmethod
-    def _find_center_spawn(maze):
-        height = len(maze)
-        width = len(maze[0])
-        center_x = width // 2
-        center_y = height // 2
-        open_cells = [
-            (x, y)
-            for y in range(height)
-            for x in range(width)
-            if maze[y][x] != 15
-        ]
-        if not open_cells:
-            return center_x, center_y
-        return min(
-            open_cells,
-            key=lambda position: (
-                abs(position[0] - center_x) + abs(position[1] - center_y),
-                abs(position[0] - center_x),
-                abs(position[1] - center_y),
-            ),
-        )
+        return True
 
     def end_game(self, result):
         self.result = result
