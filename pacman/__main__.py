@@ -1,10 +1,9 @@
-#!/usr/bin/env python3
 import sys
 
 import pygame
 
-from pacman.config import load_config
-from pacman.game import Game
+from .config import load_config
+from .game import Game
 
 
 def main():

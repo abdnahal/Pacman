@@ -4,6 +4,7 @@ from .highscores import HighScoreStore
 from .maze import load_maze, MazeError
 from .player import Player
 from .level import Level
+from .ghost import Ghost
 
 
 STATE_MENU = "menu"
