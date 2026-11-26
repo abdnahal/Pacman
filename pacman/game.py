@@ -268,7 +268,7 @@ class Game:
                                self.display.small_font)
 
     def draw_game(self):
-        self.display.clear()
+        self.display.clear("game")
         self.display.draw_maze(self.maze)
         self.display.draw_ghosts(self.level.ghost_spawn)
         self.display.draw_pacgums(self.level.pacgums)
@@ -345,4 +345,5 @@ class Game:
             else:
                 self.draw_menu()
             self.display.present()
+        self.display.close()
         pygame.quit()

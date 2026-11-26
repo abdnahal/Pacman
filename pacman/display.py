@@ -1,15 +1,28 @@
 import math
 from pathlib import Path
+
+import cv2
 import pygame
 
 
 BLACK = (0, 0, 0)
 BLUE = (30, 80, 255)
 YELLOW = (255, 220, 0)
-CYAN = (50, 255, 255)
 WHITE = (255, 255, 255)
 PACGUM = (255, 220, 190)
 SUPER_PACGUM = (255, 255, 120)
+PLAYER_FRAME_RECTS = {
+    "right": ((197, 48, 203, 191), (427, 48, 202, 191)),
+    "left": ((198, 285, 203, 184), (429, 285, 205, 184)),
+    "down": ((207, 523, 181, 202), (448, 523, 181, 202)),
+    "up": ((201, 777, 190, 179), (441, 778, 188, 177)),
+}
+PLAYER_DIRECTIONS = {0: "right", 90: "up", 180: "left", 270: "down"}
+STONE_WALL_TIERS = (
+    ((126, 87, 58), (61, 42, 30), (195, 151, 106), (83, 56, 38)),
+    ((143, 119, 87), (68, 57, 43), (210, 187, 145), (94, 77, 56)),
+    ((169, 153, 123), (82, 72, 55), (232, 217, 184), (112, 98, 73)),
+)
 GHOST_COLORS = (
     (255, 50, 70),
     (255, 150, 210),
@@ -25,21 +38,45 @@ class Display:
         self.height = height + HUD_HEIGHT
         self.tile_size = tile_size
         self.logical_size = (width, self.height)
-        self.window_size = (width * 5, height * 5)
+        desktop_sizes = pygame.display.get_desktop_sizes()
+        self.window_size = (
+            desktop_sizes[0] if desktop_sizes else (width * 5, height * 5)
+        )
         self.screen = pygame.display.set_mode(
             self.window_size,
             pygame.RESIZABLE,
         )
-        self.canvas = pygame.Surface(self.logical_size)
+        self.canvas = pygame.Surface(self.logical_size, pygame.SRCALPHA)
+        self.scaled_canvas = None
+        self.scaled_canvas_size = None
+        self.maze_surface = None
+        self.cached_maze = None
         self.font = pygame.font.SysFont("arial", 36)
         self.small_font = pygame.font.SysFont("arial", 24)
         self.large_font = pygame.font.SysFont("arial", 64)
         self.mouth_progress = 0.0
         self.mouth_direction = 1
-        self.background = self._load_image("background.png", self.logical_size)
-        self.hat = self._load_image("hat.png", (
-            int(tile_size * 1.15), int(tile_size * 0.75)
-        ), alpha=True)
+        self.player_frames = self._load_player_frames(tile_size)
+        self.videos = {
+            "menu": self._load_video("menu_background_4k30.mp4"),
+            "game": self._load_video("game_background_4k30.mp4"),
+        }
+        self.video_surfaces = {name: None for name in self.videos}
+        self.video_frames = {name: None for name in self.videos}
+        self.scaled_backgrounds = {name: None for name in self.videos}
+        self.background_window_sizes = {name: None for name in self.videos}
+        self.video_dirty = {name: True for name in self.videos}
+        self.active_background = "menu"
+        self.video_intervals = {}
+        self.video_frame_steps = {}
+        self.next_video_frame = {name: 0.0 for name in self.videos}
+        for name, video in self.videos.items():
+            fps = video.get(cv2.CAP_PROP_FPS)
+            fps = fps if math.isfinite(fps) and fps > 0 else 30
+            self.video_intervals[name] = 1 / min(fps, 30)
+            self.video_frame_steps[name] = max(
+                1, round(fps * self.video_intervals[name])
+            )
 
     def resize(self, width, height):
         width = max(320, width)
@@ -49,10 +86,44 @@ class Display:
             self.window_size,
             pygame.RESIZABLE,
         )
+        self.video_dirty = {name: True for name in self.videos}
 
     def present(self):
         logical_width, logical_height = self.logical_size
         window_width, window_height = self.screen.get_size()
+        name = self.active_background
+        background = self.scaled_backgrounds[name]
+        if (
+            self.video_dirty[name]
+            or background is None
+            or self.background_window_sizes[name]
+            != (window_width, window_height)
+        ):
+            source = self.video_surfaces[name]
+            scale = max(
+                window_width / source.get_width(),
+                window_height / source.get_height(),
+            )
+            background_size = (
+                math.ceil(source.get_width() * scale),
+                math.ceil(source.get_height() * scale),
+            )
+            background = (
+                source
+                if source.get_size() == background_size
+                else pygame.transform.smoothscale(source, background_size)
+            )
+            self.scaled_backgrounds[name] = background
+            self.background_window_sizes[name] = (window_width, window_height)
+            self.video_dirty[name] = False
+        self.screen.blit(
+            background,
+            (
+                (window_width - background.get_width()) // 2,
+                (window_height - background.get_height()) // 2,
+            ),
+        )
+
         scale = min(
             window_width / logical_width,
             window_height / logical_height,
@@ -61,11 +132,15 @@ class Display:
             max(1, int(logical_width * scale)),
             max(1, int(logical_height * scale)),
         )
-        scaled = pygame.transform.smoothscale(self.canvas, scaled_size)
-        self.screen.fill(BLACK)
+        if self.scaled_canvas_size != scaled_size:
+            self.scaled_canvas = pygame.Surface(scaled_size, pygame.SRCALPHA)
+            self.scaled_canvas_size = scaled_size
+        pygame.transform.smoothscale(
+            self.canvas, scaled_size, self.scaled_canvas
+        )
         left = (window_width - scaled_size[0]) // 2
         top = (window_height - scaled_size[1]) // 2
-        self.screen.blit(scaled, (left, top))
+        self.screen.blit(self.scaled_canvas, (left, top))
         pygame.display.flip()
 
     def set_logical_size(self, width, height, tile_size):
@@ -73,30 +148,95 @@ class Display:
         self.height = height + HUD_HEIGHT
         self.tile_size = tile_size
         self.logical_size = (width, self.height)
-        self.canvas = pygame.Surface(self.logical_size)
-        self.background = self._load_image(
-            "background.png",
-            self.logical_size,
-        )
-        self.hat = self._load_image(
-            "hat.png",
-            (
-                int(tile_size * 1.15),
-                int(tile_size * 0.75),
-            ),
-            alpha=True,
-        )
+        self.canvas = pygame.Surface(self.logical_size, pygame.SRCALPHA)
+        self.scaled_canvas = None
+        self.scaled_canvas_size = None
+        self.maze_surface = None
+        self.cached_maze = None
+        self.next_video_frame = {name: 0.0 for name in self.videos}
+        self.player_frames = self._load_player_frames(tile_size)
 
-    def _load_image(self, name, scale, alpha=False):
-        path = Path(__file__).resolve().parent.parent / name
+    def _load_player_frames(self, tile_size):
+        path = Path(__file__).resolve().parent.parent / "character movement.png"
         try:
-            image = pygame.image.load(str(path))
-            image = image.convert_alpha() if alpha else image.convert()
-            return pygame.transform.smoothscale(image, scale)
-        except (pygame.error, OSError):
-            return None
+            sheet = pygame.image.load(str(path)).convert_alpha()
+        except (pygame.error, OSError) as exc:
+            raise OSError(f"Could not load player animation sheet: {path}") from exc
+
+        sprite_size = max(1, int(tile_size * 1.2))
+        frames = {}
+        for direction, rectangles in PLAYER_FRAME_RECTS.items():
+            frames[direction] = []
+            for bounds in rectangles:
+                rect = pygame.Rect(bounds)
+                if not sheet.get_rect().contains(rect):
+                    raise ValueError(
+                        f"Player frame {direction} is outside animation sheet: {rect}"
+                    )
+                cropped = sheet.subsurface(rect).copy()
+                scale = min(
+                    sprite_size / cropped.get_width(),
+                    sprite_size / cropped.get_height(),
+                )
+                scaled_size = (
+                    max(1, round(cropped.get_width() * scale)),
+                    max(1, round(cropped.get_height() * scale)),
+                )
+                scaled = pygame.transform.smoothscale(cropped, scaled_size)
+                frame = pygame.Surface(
+                    (sprite_size, sprite_size), pygame.SRCALPHA
+                )
+                frame.blit(scaled, scaled.get_rect(center=(sprite_size // 2,) * 2))
+                frames[direction].append(frame)
+        return frames
+
+    def _load_video(self, name):
+        path = Path(__file__).resolve().parent.parent / name
+        video = cv2.VideoCapture(str(path))
+        if not video.isOpened():
+            video.release()
+            raise OSError(f"Could not open background video: {path}")
+        return video
+
+    def _draw_video(self, name):
+        now = pygame.time.get_ticks() / 1000
+        if now >= self.next_video_frame[name]:
+            video = self.videos[name]
+            for _ in range(self.video_frame_steps[name]):
+                success = video.grab()
+                if not success:
+                    video.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    success = video.grab()
+                if not success:
+                    raise OSError(
+                        f"Could not read frame from {name} background video"
+                    )
+            success, frame = video.retrieve()
+            if not success:
+                raise OSError(f"Could not read frame from {name} background video")
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame_size = (frame.shape[1], frame.shape[0])
+            self.video_surfaces[name] = pygame.image.frombuffer(
+                frame, frame_size, "RGB"
+            )
+            self.video_frames[name] = frame
+            self.video_dirty[name] = True
+            self.next_video_frame[name] = now + self.video_intervals[name]
+
+    def close(self):
+        for video in self.videos.values():
+            video.release()
 
     def draw_maze(self, maze):
+        if self.maze_surface is None or maze != self.cached_maze:
+            self.maze_surface = pygame.Surface(
+                self.logical_size, pygame.SRCALPHA
+            )
+            self._render_maze(maze, self.maze_surface)
+            self.cached_maze = [row[:] for row in maze]
+        self.canvas.blit(self.maze_surface, (0, 0))
+
+    def _render_maze(self, maze, surface):
         rows = len(maze)
         cols = len(maze[0]) if rows else 0
         for y in range(rows):
@@ -104,40 +244,142 @@ class Display:
                 walls = maze[y][x]
                 left = x * self.tile_size
                 top = y * self.tile_size + HUD_HEIGHT
+                tier = self._wall_tier(x, y, cols, rows)
                 if walls == 15:
-                    pygame.draw.rect(
-                        self.canvas,
-                        CYAN,
-                        (left, top, self.tile_size, self.tile_size),
-                    )
-                if walls & 1:
-                    pygame.draw.line(
-                        self.canvas, BLUE,
+                    self._draw_stone_block(surface, left, top, tier)
+                if walls & 1 or (y > 0 and maze[y - 1][x] & 4):
+                    self._draw_stone_wall(
+                        surface,
                         (left, top),
                         (left + self.tile_size, top),
-                        10,
+                        tier,
                     )
-                if walls & 2:
-                    pygame.draw.line(
-                        self.canvas, BLUE,
-                        (left + self.tile_size, top),
-                        (left + self.tile_size, top + self.tile_size),
-                        10,
-                    )
-                if walls & 4:
-                    pygame.draw.line(
-                        self.canvas, BLUE,
-                        (left, top + self.tile_size),
-                        (left + self.tile_size, top + self.tile_size),
-                        10,
-                    )
-                if walls & 8:
-                    pygame.draw.line(
-                        self.canvas, BLUE,
+                if walls & 8 or (x > 0 and maze[y][x - 1] & 2):
+                    self._draw_stone_wall(
+                        surface,
                         (left, top),
                         (left, top + self.tile_size),
-                        10,
+                        tier,
                     )
+                if x == cols - 1 and walls & 2:
+                    self._draw_stone_wall(
+                        surface,
+                        (left + self.tile_size, top),
+                        (left + self.tile_size, top + self.tile_size),
+                        tier,
+                    )
+                if y == rows - 1 and walls & 4:
+                    self._draw_stone_wall(
+                        surface,
+                        (left, top + self.tile_size),
+                        (left + self.tile_size, top + self.tile_size),
+                        tier,
+                    )
+
+    def _wall_tier(self, x, y, cols, rows):
+        depth = min(x, y, cols - 1 - x, rows - 1 - y)
+        max_depth = max(1, min(cols, rows) // 2)
+        if depth * 3 < max_depth:
+            return 0
+        if depth * 3 < max_depth * 2:
+            return 1
+        return 2
+
+    def _draw_stone_wall(self, surface, start, end, tier):
+        base, shadow, highlight, mortar = STONE_WALL_TIERS[tier]
+        thickness = max(6, self.tile_size // (4 + tier))
+        horizontal = start[1] == end[1]
+        offset = max(1, thickness // 3)
+        shadow_offset = (0, offset) if horizontal else (offset, 0)
+        highlight_offset = (
+            (0, -offset) if horizontal else (-offset, 0)
+        )
+        shadow_start = (
+            start[0] + shadow_offset[0],
+            start[1] + shadow_offset[1],
+        )
+        shadow_end = (
+            end[0] + shadow_offset[0],
+            end[1] + shadow_offset[1],
+        )
+        highlight_start = (
+            start[0] + highlight_offset[0],
+            start[1] + highlight_offset[1],
+        )
+        highlight_end = (
+            end[0] + highlight_offset[0],
+            end[1] + highlight_offset[1],
+        )
+        pygame.draw.line(
+            surface, shadow, shadow_start, shadow_end, thickness + 2
+        )
+        pygame.draw.line(surface, base, start, end, thickness)
+        pygame.draw.line(
+            surface,
+            highlight,
+            highlight_start,
+            highlight_end,
+            max(1, thickness // 4),
+        )
+
+        midpoint = (
+            (start[0] + end[0]) // 2,
+            (start[1] + end[1]) // 2,
+        )
+        if horizontal:
+            joint_start = (midpoint[0], midpoint[1] - thickness // 2 + 1)
+            joint_end = (midpoint[0], midpoint[1] + thickness // 2 - 1)
+        else:
+            joint_start = (midpoint[0] - thickness // 2 + 1, midpoint[1])
+            joint_end = (midpoint[0] + thickness // 2 - 1, midpoint[1])
+        pygame.draw.line(
+            surface, mortar, joint_start, joint_end, max(1, thickness // 8)
+        )
+
+        if tier == 0:
+            for fraction in (0.25, 0.75):
+                position = (
+                    int(start[0] + (end[0] - start[0]) * fraction),
+                    int(start[1] + (end[1] - start[1]) * fraction),
+                )
+                merlon_size = max(3, thickness // 3)
+                if horizontal:
+                    merlon = pygame.Rect(
+                        position[0] - merlon_size // 2,
+                        position[1] - thickness // 2,
+                        merlon_size,
+                        thickness,
+                    )
+                else:
+                    merlon = pygame.Rect(
+                        position[0] - thickness // 2,
+                        position[1] - merlon_size // 2,
+                        thickness,
+                        merlon_size,
+                    )
+                pygame.draw.rect(surface, highlight, merlon)
+                pygame.draw.rect(surface, base, merlon.inflate(-2, -2))
+
+    def _draw_stone_block(self, surface, left, top, tier):
+        base, shadow, highlight, mortar = STONE_WALL_TIERS[tier]
+        block = pygame.Rect(left, top, self.tile_size, self.tile_size)
+        inset = max(2, self.tile_size // 10)
+        pygame.draw.rect(surface, shadow, block)
+        pygame.draw.rect(surface, base, block.inflate(-inset * 2, -inset * 2))
+        pygame.draw.line(
+            surface,
+            highlight,
+            (left + inset, top + inset),
+            (left + self.tile_size - inset, top + inset),
+            max(1, inset // 2),
+        )
+        pygame.draw.line(
+            surface,
+            mortar,
+            (left + self.tile_size // 2, top + inset),
+            (left + self.tile_size // 2, top + self.tile_size - inset),
+            max(1, inset // 3),
+        )
 
     def _tile_center(self, position):
         x, y = position
@@ -205,32 +447,12 @@ class Display:
             self.mouth_progress = 0.0
             self.mouth_direction = 1
 
-        size = self.tile_size * 2
-        surface = pygame.Surface((size, size), pygame.SRCALPHA)
-        center = size // 2
-        radius = self.tile_size // 3
-        current_angle = 0.65 * self.mouth_progress
-        points = [(center, center)]
-        for i in range(21):
-            angle = current_angle + i * (
-                (2 * math.pi - 2 * current_angle) / 20
-            )
-            points.append((
-                center + radius * math.cos(angle),
-                center - radius * math.sin(angle),
-            ))
-        if len(points) > 2:
-            pygame.draw.polygon(surface, YELLOW, points)
-
-        if self.hat is not None:
-            hat_y = center - radius + 2
-            if player.angle == 180:
-                hat_y = center + radius - 2
-            hat_rect = self.hat.get_rect(center=(center, hat_y))
-            surface.blit(self.hat, hat_rect)
-
-        rotated = pygame.transform.rotate(surface, player.angle)
-        rect = rotated.get_rect(center=(
+        direction = PLAYER_DIRECTIONS.get(player.angle)
+        if direction is None:
+            raise ValueError(f"Unsupported player direction angle: {player.angle}")
+        frame_index = int(self.mouth_progress >= 0.5)
+        frame = self.player_frames[direction][frame_index]
+        rect = frame.get_rect(center=(
             int(player.render_x * self.tile_size + self.tile_size // 2),
             int(
                 player.render_y * self.tile_size
@@ -238,7 +460,7 @@ class Display:
                 + self.tile_size // 2
             ),
         ))
-        self.canvas.blit(rotated, rect)
+        self.canvas.blit(frame, rect)
 
     def draw_hud(self, text):
         pygame.draw.rect(self.canvas, BLACK, (0, 0, self.width, HUD_HEIGHT))
@@ -251,8 +473,7 @@ class Display:
         self.canvas.blit(label, rect)
         return rect
 
-    def clear(self):
-        if self.background is not None:
-            self.canvas.blit(self.background, (0, 0))
-        else:
-            self.canvas.fill(BLACK)
+    def clear(self, background="menu"):
+        self.active_background = background
+        self.canvas.fill((0, 0, 0, 0))
+        self._draw_video(background)

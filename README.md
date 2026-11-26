@@ -8,6 +8,8 @@ The program requires exactly one JSON configuration argument:
 python3 pac-man.py config.json
 ```
 
+The resizable game window opens at the desktop resolution.
+
 Missing or invalid configuration values use safe defaults and are reported in the
 main menu. Unknown keys are ignored. JSON comments beginning with `#` or `//` are
 supported.
@@ -74,6 +76,21 @@ With `"cheat_mode": true`:
 - `menu_move.wav` and `menu_select.wav` provide menu navigation sounds.
 - The supplied `.mp3`-named music files are WebM audio, so the game uses Ogg
   conversions of those files.
+
+## Video backgrounds
+
+The game uses `menu_background_4k30.mp4` on menus and result screens and
+`game_background_4k30.mp4` during gameplay. These are 30 FPS playback copies
+of `live menu.mp4` and `live background.mp4`, preserving 4K resolution while
+reducing the decoding workload. Both videos loop silently; music is handled
+separately.
+
+Maze walls use warm stone textures in three nested outer, middle, and inner
+tiers. The maze layout and collision logic are unchanged.
+
+The player uses the cardinal-direction frames in `character movement.png`.
+Closed/open frames alternate for up, down, left, and right; diagonal frames are
+ignored.
 
 ## Project structure
 
