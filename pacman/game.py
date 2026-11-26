@@ -144,6 +144,9 @@ class Game:
     def draw_game(self):
         self.display.clear()
         self.display.draw_maze(self.maze)
+        self.display.draw_ghosts(self.level.ghost_spawn)
+        self.display.draw_pacgums(self.level.pacgums)
+        self.display.draw_super_pacgums(self.level.super_pacgums)
         self.display.draw_player(self.player)
 
     def draw_name(self):

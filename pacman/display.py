@@ -8,6 +8,14 @@ BLUE = (30, 80, 255)
 YELLOW = (255, 220, 0)
 CYAN = (50, 255, 255)
 WHITE = (255, 255, 255)
+PACGUM = (255, 220, 190)
+SUPER_PACGUM = (255, 255, 120)
+GHOST_COLORS = (
+    (255, 50, 70),
+    (255, 150, 210),
+    (50, 230, 255),
+    (255, 170, 45),
+)
 
 
 class Display:
@@ -77,6 +85,7 @@ class Display:
             ),
             alpha=True,
         )
+
     def _load_image(self, name, scale, alpha=False):
         path = Path(__file__).resolve().parent.parent / name
         try:
@@ -128,6 +137,63 @@ class Display:
                         (left, top + self.tile_size),
                         10,
                     )
+
+    def _tile_center(self, position):
+        x, y = position
+        return (
+            x * self.tile_size + self.tile_size // 2,
+            y * self.tile_size + self.tile_size // 2,
+        )
+
+    def draw_pacgums(self, positions):
+        radius = max(2, self.tile_size // 10)
+        for position in positions:
+            pygame.draw.circle(
+                self.canvas, PACGUM, self._tile_center(position), radius
+            )
+
+    def draw_super_pacgums(self, positions):
+        radius = max(4, self.tile_size // 5)
+        for position in positions:
+            center = self._tile_center(position)
+            pygame.draw.circle(self.canvas, SUPER_PACGUM, center, radius)
+            pygame.draw.circle(self.canvas, WHITE, center, max(2, radius // 2))
+
+    def draw_ghosts(self, positions):
+        radius = max(5, int(self.tile_size * 0.38))
+        for index, position in enumerate(positions):
+            center_x, center_y = self._tile_center(position)
+            color = GHOST_COLORS[index % len(GHOST_COLORS)]
+            pygame.draw.circle(
+                self.canvas, color, (center_x, center_y - radius // 4), radius
+            )
+            pygame.draw.rect(
+                self.canvas,
+                color,
+                (center_x - radius, center_y - radius // 4, radius * 2, radius),
+            )
+            pygame.draw.polygon(self.canvas, color, [
+                (center_x - radius, center_y + radius // 2),
+                (center_x - radius, center_y + radius),
+                (center_x - radius // 2, center_y + radius * 3 // 4),
+                (center_x, center_y + radius),
+                (center_x + radius // 2, center_y + radius * 3 // 4),
+                (center_x + radius, center_y + radius),
+                (center_x + radius, center_y + radius // 2),
+            ])
+
+            eye_y = center_y - radius // 4
+            eye_offset = radius // 2
+            for eye_x in (center_x - eye_offset, center_x + eye_offset):
+                pygame.draw.circle(
+                    self.canvas, WHITE, (eye_x, eye_y), max(2, radius // 3)
+                )
+                pygame.draw.circle(
+                    self.canvas,
+                    BLUE,
+                    (eye_x + max(1, radius // 8), eye_y),
+                    max(1, radius // 6),
+                )
 
     def draw_player(self, player):
         self.mouth_progress += 0.15 * self.mouth_direction
