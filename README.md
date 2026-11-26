@@ -57,6 +57,24 @@ With `"cheat_mode": true`:
 - `F2` ends the run with a win.
 - `F3` ends the run with a loss.
 
+## Controls and screens
+
+- Use the up/down arrows and Enter to navigate the main and pause menus.
+- Use the arrow keys to move during a game. Press Escape to pause; press it
+  again to resume.
+- The main menu includes highscores and instructions. Press Escape on either
+  screen to return to the menu.
+- The in-game HUD shows score, lives, level, and remaining time. The timer
+  pauses with the game and reaching zero ends the run.
+- After a win or loss, enter a name and press Enter to save the score.
+
+## Audio
+
+- `background_music.ogg` plays in menus and `ingame_music.ogg` during gameplay.
+- `menu_move.wav` and `menu_select.wav` provide menu navigation sounds.
+- The supplied `.mp3`-named music files are WebM audio, so the game uses Ogg
+  conversions of those files.
+
 ## Project structure
 
 - `pac-man.py`: command-line entry point.

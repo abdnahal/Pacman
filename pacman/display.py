@@ -16,14 +16,15 @@ GHOST_COLORS = (
     (50, 230, 255),
     (255, 170, 45),
 )
+HUD_HEIGHT = 36
 
 
 class Display:
     def __init__(self, width, height, tile_size):
         self.width = width
-        self.height = height
+        self.height = height + HUD_HEIGHT
         self.tile_size = tile_size
-        self.logical_size = (width, height)
+        self.logical_size = (width, self.height)
         self.window_size = (width * 5, height * 5)
         self.screen = pygame.display.set_mode(
             self.window_size,
@@ -35,7 +36,7 @@ class Display:
         self.large_font = pygame.font.SysFont("arial", 64)
         self.mouth_progress = 0.0
         self.mouth_direction = 1
-        self.background = self._load_image("background.png", (width, height))
+        self.background = self._load_image("background.png", self.logical_size)
         self.hat = self._load_image("hat.png", (
             int(tile_size * 1.15), int(tile_size * 0.75)
         ), alpha=True)
@@ -69,13 +70,13 @@ class Display:
 
     def set_logical_size(self, width, height, tile_size):
         self.width = width
-        self.height = height
+        self.height = height + HUD_HEIGHT
         self.tile_size = tile_size
-        self.logical_size = (width, height)
+        self.logical_size = (width, self.height)
         self.canvas = pygame.Surface(self.logical_size)
         self.background = self._load_image(
             "background.png",
-            (width, height),
+            self.logical_size,
         )
         self.hat = self._load_image(
             "hat.png",
@@ -102,7 +103,7 @@ class Display:
             for x in range(cols):
                 walls = maze[y][x]
                 left = x * self.tile_size
-                top = y * self.tile_size
+                top = y * self.tile_size + HUD_HEIGHT
                 if walls == 15:
                     pygame.draw.rect(
                         self.canvas,
@@ -142,7 +143,7 @@ class Display:
         x, y = position
         return (
             x * self.tile_size + self.tile_size // 2,
-            y * self.tile_size + self.tile_size // 2,
+            y * self.tile_size + HUD_HEIGHT + self.tile_size // 2,
         )
 
     def draw_pacgums(self, positions):
@@ -231,9 +232,17 @@ class Display:
         rotated = pygame.transform.rotate(surface, player.angle)
         rect = rotated.get_rect(center=(
             int(player.render_x * self.tile_size + self.tile_size // 2),
-            int(player.render_y * self.tile_size + self.tile_size // 2),
+            int(
+                player.render_y * self.tile_size
+                + HUD_HEIGHT
+                + self.tile_size // 2
+            ),
         ))
         self.canvas.blit(rotated, rect)
+
+    def draw_hud(self, text):
+        pygame.draw.rect(self.canvas, BLACK, (0, 0, self.width, HUD_HEIGHT))
+        self.draw_text(text, 4, self.small_font, center=False)
 
     def draw_text(self, text, y, font=None, color=WHITE, center=True):
         font = font or self.font
