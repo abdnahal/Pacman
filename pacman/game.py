@@ -18,6 +18,8 @@ STATE_PAUSE = "pause"
 STATE_NAME = "name"
 MENU_ITEMS = ("Start Game", "View Highscores", "Instructions", "Exit")
 PAUSE_ITEMS = ("Resume", "Return to Main Menu")
+PLAYER_SECONDS_PER_TILE = 0.22
+GHOST_SECONDS_PER_TILE = 0.30
 
 
 class Game:
@@ -59,6 +61,10 @@ class Game:
         self.cheat_invincible = False
         self.highscores = HighScoreStore(config["highscore_filename"])
 
+        self.ghosts = []
+        self.ghost_move_interval = GHOST_SECONDS_PER_TILE
+        self.frightened_remaining = 0.0
+        self.player_invulnerable_remaining = 0.0
         level = config["levels"][0]
         self.tile_size = min(80, max(24, 1000 // level["width"], 700 // level["height"]))
         self.display = Display(
@@ -75,7 +81,10 @@ class Game:
         self.score = 0
         self.lives = self.config["lives"]
         self.cheat_invincible = False
+        self.frightened_remaining = 0.0
+        self.player_invulnerable_remaining = 0.0
         if self.load_level():
+            self._collect_player_item()
             self.state = STATE_GAME
 
     def load_level(self) -> bool:
@@ -85,8 +94,9 @@ class Game:
                 level["width"], level["height"], level["seed"]
             )
             self.level = Level(maze)
+            self.ghosts = [Ghost(spawn) for spawn in self.level.ghost_spawn]
             self.player = Player(*self.level.player_spawn,
-                                 self.tile_size / 0.30)
+                                 self.tile_size / PLAYER_SECONDS_PER_TILE)
         except MazeError as exc:
             self.error_message = str(exc)
             self.state = STATE_MENU
@@ -105,9 +115,81 @@ class Game:
             level["height"] * self.tile_size,
             self.tile_size,
         )
+        self.player.move_speed = self.tile_size / PLAYER_SECONDS_PER_TILE
         self.error_message = ""
         self.level_time_remaining = self.config["level_max_time"]
         return True
+
+    def _collect_player_item(self):
+        item = self.level.collect((self.player.grid_x, self.player.grid_y))
+        if item == "normal":
+            self.score += self.config["points_per_pacgum"]
+        elif item == "super":
+            self.score += self.config["points_per_super_pacgum"]
+            self.frightened_remaining = 6.0
+
+    def _player_distances(self):
+        start = (self.player.grid_x, self.player.grid_y)
+        distances = {start: 0}
+        queue = [start]
+        for position in queue:
+            for neighbor in self.level.neighbors(position):
+                if neighbor not in distances:
+                    distances[neighbor] = distances[position] + 1
+                    queue.append(neighbor)
+        return distances
+
+    def _update_ghosts(self, elapsed):
+        distances = self._player_distances()
+        for ghost in self.ghosts:
+            remaining = ghost.update(elapsed)
+            while ghost.active and not ghost.moving:
+                next_cell = ghost.choose_next_cell(
+                    self.level,
+                    distances,
+                    self.frightened_remaining > 0,
+                )
+                if next_cell is None:
+                    break
+                ghost.move_to(next_cell, self.ghost_move_interval)
+                remaining = ghost.update(remaining)
+                if remaining <= 0.0:
+                    break
+
+    def _handle_ghost_collisions(self):
+        for ghost in self.ghosts:
+            if not ghost.active:
+                continue
+            dx = ghost.render_x - self.player.render_x
+            dy = ghost.render_y - self.player.render_y
+            if dx * dx + dy * dy > 0.6 * 0.6:
+                continue
+            if self.frightened_remaining > 0:
+                self.score += self.config["points_per_ghost"]
+                ghost.respawn(2.0)
+                continue
+            if self.cheat_invincible or self.player_invulnerable_remaining > 0:
+                continue
+
+            self.lives -= 1
+            self.player.grid_x, self.player.grid_y = self.level.player_spawn
+            self.player.render_x = float(self.player.grid_x)
+            self.player.render_y = float(self.player.grid_y)
+            self.player.current_direction = None
+            self.player.requested_direction = None
+            self.player.movement_progress = 0.0
+            self.player_invulnerable_remaining = 1.5
+            for reset_ghost in self.ghosts:
+                reset_ghost.reset()
+            break
+
+    def _complete_level(self):
+        if self.level_index + 1 < len(self.config["levels"]):
+            self.level_index += 1
+            if self.load_level():
+                self._collect_player_item()
+            return
+        self.end_game("WIN")
 
     def end_game(self, result):
         self.result = result
@@ -271,7 +353,10 @@ class Game:
     def draw_game(self):
         self.display.clear("game")
         self.display.draw_maze(self.maze)
-        self.display.draw_ghosts(self.level.ghost_spawn)
+        self.display.draw_ghosts(
+            self.ghosts,
+            frightened=self.frightened_remaining > 0,
+        )
         self.display.draw_pacgums(self.level.pacgums)
         self.display.draw_super_pacgums(self.level.super_pacgums)
         self.display.draw_player(self.player)
@@ -332,6 +417,20 @@ class Game:
                         len(self.maze[0]), len(self.maze),
                         self.tile_size,
                     )
+                    elapsed = frame_time / 1000
+                    self.player_invulnerable_remaining = max(
+                        0.0, self.player_invulnerable_remaining - elapsed
+                    )
+                    self.frightened_remaining = max(
+                        0.0, self.frightened_remaining - elapsed
+                    )
+                    self._collect_player_item()
+                    self._handle_ghost_collisions()
+                    if self.lives > 0:
+                        self._update_ghosts(elapsed)
+                        self._handle_ghost_collisions()
+                    if self.lives > 0 and self.level.is_complete():
+                        self._complete_level()
 
             if self.state == STATE_GAME:
                 self.draw_game()
@@ -346,5 +445,4 @@ class Game:
             else:
                 self.draw_menu()
             self.display.present()
-        self.display.close()
         pygame.quit()

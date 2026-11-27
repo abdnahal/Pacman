@@ -68,6 +68,9 @@ With `"cheat_mode": true`:
   screen to return to the menu.
 - The in-game HUD shows score, lives, level, and remaining time. The timer
   pauses with the game and reaching zero ends the run.
+- Collecting gums adds points; super gums frighten ghosts temporarily. Ghosts
+  chase Pac-Man, can be eaten while frightened, and cost a life on contact
+  otherwise.
 - After a win or loss, enter a name and press Enter to save the score.
 
 ## Audio
@@ -77,13 +80,11 @@ With `"cheat_mode": true`:
 - The supplied `.mp3`-named music files are WebM audio, so the game uses Ogg
   conversions of those files.
 
-## Video backgrounds
+## Background art
 
-The game uses `menu_background_4k30.mp4` on menus and result screens and
-`game_background_4k30.mp4` during gameplay. These are 30 FPS playback copies
-of `live menu.mp4` and `live background.mp4`, preserving 4K resolution while
-reducing the decoding workload. Both videos loop silently; music is handled
-separately.
+The menu and result screens use `menu_background.png`; gameplay uses
+`game_background.png`. These are original, static fortress-and-arcade-maze
+illustrations. Music is handled separately.
 
 Maze walls use warm stone textures in three nested outer, middle, and inner
 tiers. The maze layout and collision logic are unchanged.

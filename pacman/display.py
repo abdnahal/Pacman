@@ -1,7 +1,6 @@
 import math
 from pathlib import Path
 
-import cv2
 import pygame
 
 
@@ -57,26 +56,13 @@ class Display:
         self.mouth_progress = 0.0
         self.mouth_direction = 1
         self.player_frames = self._load_player_frames(tile_size)
-        self.videos = {
-            "menu": self._load_video("menu_background_4k30.mp4"),
-            "game": self._load_video("game_background_4k30.mp4"),
+        self.backgrounds = {
+            "menu": self._load_background("menu_background.png"),
+            "game": self._load_background("game_background.png"),
         }
-        self.video_surfaces = {name: None for name in self.videos}
-        self.video_frames = {name: None for name in self.videos}
-        self.scaled_backgrounds = {name: None for name in self.videos}
-        self.background_window_sizes = {name: None for name in self.videos}
-        self.video_dirty = {name: True for name in self.videos}
+        self.scaled_backgrounds = {name: None for name in self.backgrounds}
+        self.background_window_sizes = {name: None for name in self.backgrounds}
         self.active_background = "menu"
-        self.video_intervals = {}
-        self.video_frame_steps = {}
-        self.next_video_frame = {name: 0.0 for name in self.videos}
-        for name, video in self.videos.items():
-            fps = video.get(cv2.CAP_PROP_FPS)
-            fps = fps if math.isfinite(fps) and fps > 0 else 30
-            self.video_intervals[name] = 1 / min(fps, 30)
-            self.video_frame_steps[name] = max(
-                1, round(fps * self.video_intervals[name])
-            )
 
     def resize(self, width, height):
         width = max(320, width)
@@ -86,7 +72,6 @@ class Display:
             self.window_size,
             pygame.RESIZABLE,
         )
-        self.video_dirty = {name: True for name in self.videos}
 
     def present(self):
         logical_width, logical_height = self.logical_size
@@ -94,12 +79,11 @@ class Display:
         name = self.active_background
         background = self.scaled_backgrounds[name]
         if (
-            self.video_dirty[name]
-            or background is None
+            background is None
             or self.background_window_sizes[name]
             != (window_width, window_height)
         ):
-            source = self.video_surfaces[name]
+            source = self.backgrounds[name]
             scale = max(
                 window_width / source.get_width(),
                 window_height / source.get_height(),
@@ -115,7 +99,6 @@ class Display:
             )
             self.scaled_backgrounds[name] = background
             self.background_window_sizes[name] = (window_width, window_height)
-            self.video_dirty[name] = False
         self.screen.blit(
             background,
             (
@@ -153,7 +136,6 @@ class Display:
         self.scaled_canvas_size = None
         self.maze_surface = None
         self.cached_maze = None
-        self.next_video_frame = {name: 0.0 for name in self.videos}
         self.player_frames = self._load_player_frames(tile_size)
 
     def _load_player_frames(self, tile_size):
@@ -190,42 +172,12 @@ class Display:
                 frames[direction].append(frame)
         return frames
 
-    def _load_video(self, name):
+    def _load_background(self, name):
         path = Path(__file__).resolve().parent.parent / name
-        video = cv2.VideoCapture(str(path))
-        if not video.isOpened():
-            video.release()
-            raise OSError(f"Could not open background video: {path}")
-        return video
-
-    def _draw_video(self, name):
-        now = pygame.time.get_ticks() / 1000
-        if now >= self.next_video_frame[name]:
-            video = self.videos[name]
-            for _ in range(self.video_frame_steps[name]):
-                success = video.grab()
-                if not success:
-                    video.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                    success = video.grab()
-                if not success:
-                    raise OSError(
-                        f"Could not read frame from {name} background video"
-                    )
-            success, frame = video.retrieve()
-            if not success:
-                raise OSError(f"Could not read frame from {name} background video")
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_size = (frame.shape[1], frame.shape[0])
-            self.video_surfaces[name] = pygame.image.frombuffer(
-                frame, frame_size, "RGB"
-            )
-            self.video_frames[name] = frame
-            self.video_dirty[name] = True
-            self.next_video_frame[name] = now + self.video_intervals[name]
-
-    def close(self):
-        for video in self.videos.values():
-            video.release()
+        try:
+            return pygame.image.load(str(path)).convert()
+        except (pygame.error, OSError) as exc:
+            raise OSError(f"Could not load background image: {path}") from exc
 
     def draw_maze(self, maze):
         if self.maze_surface is None or maze != self.cached_maze:
@@ -402,11 +354,22 @@ class Display:
             pygame.draw.circle(self.canvas, SUPER_PACGUM, center, radius)
             pygame.draw.circle(self.canvas, WHITE, center, max(2, radius // 2))
 
-    def draw_ghosts(self, positions):
+    def draw_ghosts(self, ghosts, frightened=False):
         radius = max(5, int(self.tile_size * 0.38))
-        for index, position in enumerate(positions):
-            center_x, center_y = self._tile_center(position)
-            color = GHOST_COLORS[index % len(GHOST_COLORS)]
+        for index, ghost in enumerate(ghosts):
+            if not ghost.active:
+                continue
+            center_x = round(ghost.render_x * self.tile_size + self.tile_size // 2)
+            center_y = round(
+                ghost.render_y * self.tile_size
+                + HUD_HEIGHT
+                + self.tile_size // 2
+            )
+            color = (
+                (55, 85, 235)
+                if frightened
+                else GHOST_COLORS[index % len(GHOST_COLORS)]
+            )
             pygame.draw.circle(
                 self.canvas, color, (center_x, center_y - radius // 4), radius
             )
@@ -433,7 +396,7 @@ class Display:
                 )
                 pygame.draw.circle(
                     self.canvas,
-                    BLUE,
+                    BLUE if not frightened else WHITE,
                     (eye_x + max(1, radius // 8), eye_y),
                     max(1, radius // 6),
                 )
@@ -476,4 +439,3 @@ class Display:
     def clear(self, background="menu"):
         self.active_background = background
         self.canvas.fill((0, 0, 0, 0))
-        self._draw_video(background)
