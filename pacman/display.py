@@ -1,4 +1,3 @@
-import math
 from pathlib import Path
 
 import pygame
@@ -60,9 +59,10 @@ class Display:
             "menu": self._load_background("menu_background.png"),
             "game": self._load_background("game_background.png"),
         }
-        self.scaled_backgrounds = {name: None for name in self.backgrounds}
-        self.background_window_sizes = {name: None for name in self.backgrounds}
         self.active_background = "menu"
+        self.background = pygame.transform.scale(
+            self.backgrounds[self.active_background], self.window_size
+        )
 
     def resize(self, width, height):
         width = max(320, width)
@@ -72,40 +72,14 @@ class Display:
             self.window_size,
             pygame.RESIZABLE,
         )
+        self.background = pygame.transform.scale(
+            self.backgrounds[self.active_background], self.window_size
+        )
 
     def present(self):
         logical_width, logical_height = self.logical_size
         window_width, window_height = self.screen.get_size()
-        name = self.active_background
-        background = self.scaled_backgrounds[name]
-        if (
-            background is None
-            or self.background_window_sizes[name]
-            != (window_width, window_height)
-        ):
-            source = self.backgrounds[name]
-            scale = max(
-                window_width / source.get_width(),
-                window_height / source.get_height(),
-            )
-            background_size = (
-                math.ceil(source.get_width() * scale),
-                math.ceil(source.get_height() * scale),
-            )
-            background = (
-                source
-                if source.get_size() == background_size
-                else pygame.transform.smoothscale(source, background_size)
-            )
-            self.scaled_backgrounds[name] = background
-            self.background_window_sizes[name] = (window_width, window_height)
-        self.screen.blit(
-            background,
-            (
-                (window_width - background.get_width()) // 2,
-                (window_height - background.get_height()) // 2,
-            ),
-        )
+        self.screen.blit(self.background, (0, 0))
 
         scale = min(
             window_width / logical_width,
@@ -118,7 +92,7 @@ class Display:
         if self.scaled_canvas_size != scaled_size:
             self.scaled_canvas = pygame.Surface(scaled_size, pygame.SRCALPHA)
             self.scaled_canvas_size = scaled_size
-        pygame.transform.smoothscale(
+        pygame.transform.scale(
             self.canvas, scaled_size, self.scaled_canvas
         )
         left = (window_width - scaled_size[0]) // 2
@@ -164,7 +138,7 @@ class Display:
                     max(1, round(cropped.get_width() * scale)),
                     max(1, round(cropped.get_height() * scale)),
                 )
-                scaled = pygame.transform.smoothscale(cropped, scaled_size)
+                scaled = pygame.transform.scale(cropped, scaled_size)
                 frame = pygame.Surface(
                     (sprite_size, sprite_size), pygame.SRCALPHA
                 )
@@ -437,5 +411,9 @@ class Display:
         return rect
 
     def clear(self, background="menu"):
-        self.active_background = background
+        if background != self.active_background:
+            self.active_background = background
+            self.background = pygame.transform.scale(
+                self.backgrounds[background], self.screen.get_size()
+            )
         self.canvas.fill((0, 0, 0, 0))

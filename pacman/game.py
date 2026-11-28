@@ -18,7 +18,7 @@ STATE_PAUSE = "pause"
 STATE_NAME = "name"
 MENU_ITEMS = ("Start Game", "View Highscores", "Instructions", "Exit")
 PAUSE_ITEMS = ("Resume", "Return to Main Menu")
-PLAYER_SECONDS_PER_TILE = 0.22
+PLAYER_SECONDS_PER_TILE = 0.20
 GHOST_SECONDS_PER_TILE = 0.30
 
 
