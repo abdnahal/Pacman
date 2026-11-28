@@ -119,7 +119,7 @@ class Display:
         except (pygame.error, OSError) as exc:
             raise OSError(f"Could not load player animation sheet: {path}") from exc
 
-        sprite_size = max(1, int(tile_size * 1.2))
+        sprite_size = max(1, int(tile_size * 0.9))
         frames = {}
         for direction, rectangles in PLAYER_FRAME_RECTS.items():
             frames[direction] = []
@@ -142,7 +142,7 @@ class Display:
                 frame = pygame.Surface(
                     (sprite_size, sprite_size), pygame.SRCALPHA
                 )
-                frame.blit(scaled, scaled.get_rect(center=(sprite_size // 2,) * 2))
+                frame.blit(scaled, scaled.get_rect(center=(sprite_size // 2, sprite_size // 2)))
                 frames[direction].append(frame)
         return frames
 
