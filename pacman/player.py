@@ -1,16 +1,17 @@
 import pygame
-
+from .types import Direction
+from .level import Level
 
 DIRECTIONS = {
-    pygame.K_UP: (0, -1, 1),
-    pygame.K_RIGHT: (1, 0, 2),
-    pygame.K_DOWN: (0, 1, 4),
-    pygame.K_LEFT: (-1, 0, 8),
+    pygame.K_UP: Direction.UP,
+    pygame.K_RIGHT: Direction.RIGHT,
+    pygame.K_DOWN: Direction.DOWN,
+    pygame.K_LEFT: Direction.LEFT,
 }
 
 
 class Player:
-    def __init__(self, x, y, move_speed):
+    def __init__(self, x, y, move_speed, maze):
         self.grid_x = x
         self.grid_y = y
         self.render_x = float(x)
@@ -20,23 +21,18 @@ class Player:
         self.movement_progress = 0.0
         self.move_speed = move_speed
         self.angle = 0
+        self.maze = maze
+        self.level = Level(maze)
 
     def set_direction(self, key):
         if key in DIRECTIONS:
-            self.requested_direction = key
+            self.requested_direction = DIRECTIONS[key]
 
-    def can_move(self, key, maze, cols, rows):
-        dx, dy, wall_bit = DIRECTIONS[key]
-        new_x = self.grid_x + dx
-        new_y = self.grid_y + dy
-        if not (0 <= new_x < cols and 0 <= new_y < rows):
-            return False
-        return not (maze[self.grid_y][self.grid_x] & wall_bit) and maze[new_y][new_x] != 15
-
-    def update(self, frame_time, maze, cols, rows, tile_size):
-        if self.current_direction is not None and self.requested_direction is not None:
-            current_dx, current_dy, _ = DIRECTIONS[self.current_direction]
-            requested_dx, requested_dy, _ = DIRECTIONS[self.requested_direction]
+    def update(self, frame_time, tile_size):
+        if (self.current_direction is not None
+                and self.requested_direction is not None):
+            current_dx, current_dy = self.current_direction.delta
+            requested_dx, requested_dy = self.requested_direction.delta
             if (current_dx, current_dy) == (-requested_dx, -requested_dy):
                 self.grid_x += current_dx
                 self.grid_y += current_dy
@@ -46,17 +42,19 @@ class Player:
         distance = self.move_speed * frame_time / 1000 / tile_size
         while distance > 0:
             if self.current_direction is None:
-                if self.requested_direction is None or not self.can_move(
-                    self.requested_direction, maze, cols, rows
+                if self.requested_direction is None or not self.level.can_move(
+                    (self.grid_x, self.grid_y), self.requested_direction
                 ):
                     break
                 self.current_direction = self.requested_direction
 
-            if self.movement_progress == 0 and self.requested_direction is not None:
-                if self.can_move(self.requested_direction, maze, cols, rows):
+            if (self.movement_progress == 0
+                    and self.requested_direction is not None):
+                if self.level.can_move((self.grid_x, self.grid_y),
+                                       self.requested_direction):
                     self.current_direction = self.requested_direction
 
-            dx, dy, _ = DIRECTIONS[self.current_direction]
+            dx, dy = self.current_direction.delta
             distance_to_next = 1.0 - self.movement_progress
             step = min(distance, distance_to_next)
             self.movement_progress += step
@@ -67,11 +65,13 @@ class Player:
                 self.grid_x += dx
                 self.grid_y += dy
                 self.movement_progress = 0.0
-                if self.requested_direction is not None and self.can_move(
-                    self.requested_direction, maze, cols, rows
-                ):
+                if (self.requested_direction is not None 
+                    and self.level.can_move(
+                        (self.grid_x, self.grid_y), self.requested_direction
+                        )):
                     self.current_direction = self.requested_direction
-                elif self.can_move(previous_direction, maze, cols, rows):
+                elif self.level.can_move((self.grid_x, self.grid_y),
+                                         previous_direction):
                     self.current_direction = previous_direction
                 else:
                     self.current_direction = None
@@ -80,7 +80,7 @@ class Player:
             self.render_x = float(self.grid_x)
             self.render_y = float(self.grid_y)
         else:
-            dx, dy, _ = DIRECTIONS[self.current_direction]
+            dx, dy = self.current_direction.delta
             if dx == 1:
                 self.angle = 0
             elif dx == -1:

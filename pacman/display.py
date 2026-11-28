@@ -61,7 +61,8 @@ class Display:
             "game": self._load_background("game_background.png"),
         }
         self.scaled_backgrounds = {name: None for name in self.backgrounds}
-        self.background_window_sizes = {name: None for name in self.backgrounds}
+        self.background_window_sizes = {name: None
+                                        for name in self.backgrounds}
         self.active_background = "menu"
 
     def resize(self, width, height):
@@ -139,11 +140,13 @@ class Display:
         self.player_frames = self._load_player_frames(tile_size)
 
     def _load_player_frames(self, tile_size):
-        path = Path(__file__).resolve().parent.parent / "character movement.png"
+        path = Path(__file__).resolve(
+        ).parent.parent / "character movement.png"
         try:
             sheet = pygame.image.load(str(path)).convert_alpha()
         except (pygame.error, OSError) as exc:
-            raise OSError(f"Could not load player animation sheet: {path}") from exc
+            raise OSError(f"Could not load player animation sheet: \
+{path}") from exc
 
         sprite_size = max(1, int(tile_size * 1.2))
         frames = {}
@@ -153,7 +156,8 @@ class Display:
                 rect = pygame.Rect(bounds)
                 if not sheet.get_rect().contains(rect):
                     raise ValueError(
-                        f"Player frame {direction} is outside animation sheet: {rect}"
+                        f"Player frame {direction} "
+                        f"is outside animation sheet: {rect}"
                     )
                 cropped = sheet.subsurface(rect).copy()
                 scale = min(
@@ -168,7 +172,8 @@ class Display:
                 frame = pygame.Surface(
                     (sprite_size, sprite_size), pygame.SRCALPHA
                 )
-                frame.blit(scaled, scaled.get_rect(center=(sprite_size // 2,) * 2))
+                frame.blit(scaled, scaled.get_rect(
+                    center=(sprite_size // 2,) * 2))
                 frames[direction].append(frame)
         return frames
 
@@ -359,7 +364,8 @@ class Display:
         for index, ghost in enumerate(ghosts):
             if not ghost.active:
                 continue
-            center_x = round(ghost.render_x * self.tile_size + self.tile_size // 2)
+            center_x = round(
+                ghost.render_x * self.tile_size + self.tile_size // 2)
             center_y = round(
                 ghost.render_y * self.tile_size
                 + HUD_HEIGHT
@@ -376,7 +382,8 @@ class Display:
             pygame.draw.rect(
                 self.canvas,
                 color,
-                (center_x - radius, center_y - radius // 4, radius * 2, radius),
+                (center_x - radius, center_y - radius // 4,
+                 radius * 2, radius),
             )
             pygame.draw.polygon(self.canvas, color, [
                 (center_x - radius, center_y + radius // 2),
@@ -412,7 +419,8 @@ class Display:
 
         direction = PLAYER_DIRECTIONS.get(player.angle)
         if direction is None:
-            raise ValueError(f"Unsupported player direction angle: {player.angle}")
+            raise ValueError(f"Unsupported player direction angle: "
+                             f"{player.angle}")
         frame_index = int(self.mouth_progress >= 0.5)
         frame = self.player_frames[direction][frame_index]
         rect = frame.get_rect(center=(
@@ -432,7 +440,8 @@ class Display:
     def draw_text(self, text, y, font=None, color=WHITE, center=True):
         font = font or self.font
         label = font.render(text, True, color)
-        rect = label.get_rect(center=(self.width // 2, y)) if center else label.get_rect(topleft=(40, y))
+        rect = label.get_rect(center=(self.width // 2, y)
+                              ) if center else label.get_rect(topleft=(40, y))
         self.canvas.blit(label, rect)
         return rect
 

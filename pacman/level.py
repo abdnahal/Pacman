@@ -85,18 +85,18 @@ class Level:
             (self.width - 1, self.height - 1),
         ]
         corners = []
-        available = self.reachable.copy()
+        available = self.reachable.copy() - set([self.player_spawn])
         if len(available) < 4:
             raise MazeError("Need four reachable cells for ghost spawns")
         for target in targets:
-            if target in self.reachable:
+            if target in available:
                 chosen = target
             else:
                 chosen = min(available, key=lambda pos: (abs(
                     target[0] - pos[0]) + abs(target[1] - pos[1])))
             corners.append(chosen)
             available.remove(chosen)
-        if len(corners) != 4:
+        if len(set(corners)) != 4:
             raise MazeError("Insufficient corners for ghost spawn!")
         return corners
 

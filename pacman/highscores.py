@@ -20,9 +20,11 @@ class HighScoreStore:
                     continue
                 name = item.get("name")
                 score = item.get("score")
-                if self.valid_name(name) and isinstance(score, int) and not isinstance(score, bool):
+                if self.valid_name(name) and isinstance(
+                                score, int) and not isinstance(score, bool):
                     if score >= 0:
-                        scores.append({"name": name.strip()[:10], "score": score})
+                        scores.append({"name": name.strip()[:10],
+                                       "score": score})
             scores.sort(key=lambda item: item["score"], reverse=True)
             return scores[:10]
         except (OSError, json.JSONDecodeError):
@@ -47,7 +49,8 @@ class HighScoreStore:
         scores.sort(key=lambda item: item["score"], reverse=True)
         scores = scores[:10]
         try:
-            self.path.write_text(json.dumps(scores, indent=2), encoding="utf-8")
+            self.path.write_text(json.dumps(scores, indent=2),
+                                 encoding="utf-8")
             return True
         except OSError:
             return False

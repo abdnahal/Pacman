@@ -7,7 +7,7 @@ from .highscores import HighScoreStore
 from .maze import load_maze, MazeError
 from .player import Player
 from .level import Level
-from .ghost import Ghost
+from .ghost import Ghost, GreedyGhost
 
 
 STATE_MENU = "menu"
@@ -42,8 +42,10 @@ class Game:
         self.select_sound = None
         if self.audio_enabled:
             audio_dir = Path(__file__).resolve().parent.parent
-            self.move_sound = pygame.mixer.Sound(str(audio_dir / "menu_move.wav"))
-            self.select_sound = pygame.mixer.Sound(str(audio_dir / "menu_select.wav"))
+            self.move_sound = pygame.mixer.Sound(str(
+                audio_dir / "menu_move.wav"))
+            self.select_sound = pygame.mixer.Sound(str(
+                audio_dir / "menu_select.wav"))
             self.move_sound.set_volume(0.7)
             self.select_sound.set_volume(0.7)
         self.clock = pygame.time.Clock()
@@ -66,7 +68,9 @@ class Game:
         self.frightened_remaining = 0.0
         self.player_invulnerable_remaining = 0.0
         level = config["levels"][0]
-        self.tile_size = min(80, max(24, 1000 // level["width"], 700 // level["height"]))
+        self.tile_size = min(80, max(24,
+                                     1000 // level["width"],
+                                     700 // level["height"]))
         self.display = Display(
             level["width"] * self.tile_size,
             level["height"] * self.tile_size,
@@ -94,9 +98,11 @@ class Game:
                 level["width"], level["height"], level["seed"]
             )
             self.level = Level(maze)
-            self.ghosts = [Ghost(spawn) for spawn in self.level.ghost_spawn]
+            self.ghosts = [Ghost(spawn) if i % 2 == 0 else GreedyGhost(spawn)
+                           for i, spawn in enumerate(self.level.ghost_spawn)]
             self.player = Player(*self.level.player_spawn,
-                                 self.tile_size / PLAYER_SECONDS_PER_TILE)
+                                 self.tile_size / PLAYER_SECONDS_PER_TILE,
+                                 maze)
         except MazeError as exc:
             self.error_message = str(exc)
             self.state = STATE_MENU
@@ -203,7 +209,8 @@ class Game:
     def update_music(self):
         if not self.audio_enabled:
             return
-        track = "ingame_music.ogg" if self.state == STATE_GAME else "background_music.ogg"
+        track = ("ingame_music.ogg" if self.state == STATE_GAME
+                 else "background_music.ogg")
         if track == self.music_track:
             return
         path = Path(__file__).resolve().parent.parent / track
@@ -254,10 +261,12 @@ class Game:
         if event.key == pygame.K_ESCAPE:
             self.state = STATE_GAME
         elif event.key in (pygame.K_UP, pygame.K_w):
-            self.pause_selection = (self.pause_selection - 1) % len(PAUSE_ITEMS)
+            self.pause_selection = ((self.pause_selection - 1
+                                     ) % len(PAUSE_ITEMS))
             self.play_ui_sound(self.move_sound)
         elif event.key in (pygame.K_DOWN, pygame.K_s):
-            self.pause_selection = (self.pause_selection + 1) % len(PAUSE_ITEMS)
+            self.pause_selection = ((self.pause_selection + 1
+                                     ) % len(PAUSE_ITEMS))
             self.play_ui_sound(self.move_sound)
         elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
             self.play_ui_sound(self.select_sound)
@@ -277,7 +286,8 @@ class Game:
             self.state = STATE_MENU
         elif event.key == pygame.K_BACKSPACE:
             self.name = self.name[:-1]
-        elif (event.unicode.isascii() and event.unicode.isalnum()) or event.unicode == " ":
+        elif (event.unicode.isascii()
+              and event.unicode.isalnum()) or event.unicode == " ":
             if len(self.name) < 10:
                 self.name += event.unicode
 
@@ -299,15 +309,18 @@ class Game:
             self.display.small_font,
         )
         if self.error_message:
-            self.display.draw_text(self.error_message, self.display.height - 70,
+            self.display.draw_text(self.error_message,
+                                   self.display.height - 70,
                                    self.display.small_font)
         for warning in self.warnings[:2]:
-            self.display.draw_text(warning, self.display.height - 40,
+            self.display.draw_text(warning,
+                                   self.display.height - 40,
                                    self.display.small_font)
 
     def draw_highscores(self):
         self.display.clear()
-        self.display.draw_text("HIGHSCORES", 100, self.display.large_font, YELLOW)
+        self.display.draw_text("HIGHSCORES", 100, self.display.large_font,
+                               YELLOW)
         scores = self.highscores.load()
         if not scores:
             self.display.draw_text("No scores yet", 190)
@@ -323,7 +336,8 @@ class Game:
 
     def draw_instructions(self):
         self.display.clear()
-        self.display.draw_text("INSTRUCTIONS", 100, self.display.large_font, YELLOW)
+        self.display.draw_text("INSTRUCTIONS", 100, self.display.large_font,
+                               YELLOW)
         lines = (
             "Arrow keys: move Pac-Man",
             "Collect gums and super gums",
@@ -331,7 +345,8 @@ class Game:
             "Press ESC during a game to pause",
         )
         for index, line in enumerate(lines):
-            self.display.draw_text(line, 210 + index * 48, self.display.small_font)
+            self.display.draw_text(line, 210 + index * 48,
+                                   self.display.small_font)
         self.display.draw_text("Press ESC to return", self.display.height - 50,
                                self.display.small_font)
 
@@ -398,7 +413,8 @@ class Game:
                 elif self.state == STATE_PAUSE:
                     self.handle_pause(event)
                 elif self.state in (STATE_HIGHSCORES, STATE_INSTRUCTIONS):
-                    if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    if event.type == pygame.KEYDOWN and event.key == (
+                                                            pygame.K_ESCAPE):
                         self.state = STATE_MENU
                 elif self.state == STATE_NAME:
                     self.handle_name(event)
@@ -413,9 +429,7 @@ class Game:
                     self.end_game("LOSE")
                 else:
                     self.player.update(
-                        frame_time, self.maze,
-                        len(self.maze[0]), len(self.maze),
-                        self.tile_size,
+                        frame_time, self.tile_size,
                     )
                     elapsed = frame_time / 1000
                     self.player_invulnerable_remaining = max(

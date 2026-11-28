@@ -1,4 +1,5 @@
 from .level import Position, Level
+from random import choice
 
 
 class Ghost:
@@ -110,3 +111,28 @@ class Ghost:
             return max(candidates, key=lambda pos: distances[pos])
 
         return min(candidates, key=lambda pos: distances[pos])
+
+
+class GreedyGhost(Ghost):
+    def __init__(self, spawn):
+        super().__init__(spawn)
+
+    def choose_next_cell(self, level, distances, frightened) -> Position:
+        """Choose a legal neighboring cell to chase or flee."""
+        if frightened:
+            return super().choose_next_cell(level, distances, frightened)
+        if not self.active:
+            return None
+
+        if not frightened and distances.get(self.position) == 0:
+            return None
+
+        candidates = [position for position in level.neighbors(self.position)
+                      if position in distances]
+        if not candidates:
+            return None
+        close = [position for position in candidates
+                 if distances[position] <= 3]
+        if close:
+            return choice(close)
+        return choice(candidates)
