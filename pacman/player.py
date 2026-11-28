@@ -1,6 +1,6 @@
 import pygame
 from .types import Direction
-from .level import Level
+
 
 DIRECTIONS = {
     pygame.K_UP: Direction.UP,
@@ -11,7 +11,7 @@ DIRECTIONS = {
 
 
 class Player:
-    def __init__(self, x, y, move_speed, maze):
+    def __init__(self, x, y, move_speed, maze, level):
         self.grid_x = x
         self.grid_y = y
         self.render_x = float(x)
@@ -22,7 +22,7 @@ class Player:
         self.move_speed = move_speed
         self.angle = 0
         self.maze = maze
-        self.level = Level(maze)
+        self.level = level
 
     def set_direction(self, key):
         if key in DIRECTIONS:
@@ -65,7 +65,7 @@ class Player:
                 self.grid_x += dx
                 self.grid_y += dy
                 self.movement_progress = 0.0
-                if (self.requested_direction is not None 
+                if (self.requested_direction is not None
                     and self.level.can_move(
                         (self.grid_x, self.grid_y), self.requested_direction
                         )):

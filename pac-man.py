@@ -2,8 +2,8 @@ import sys
 
 import pygame
 
-from .config import load_config
-from .game import Game
+from pacman.config import load_config
+from pacman.game import Game
 
 
 def main():

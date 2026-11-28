@@ -117,7 +117,12 @@ class GreedyGhost(Ghost):
     def __init__(self, spawn):
         super().__init__(spawn)
 
-    def choose_next_cell(self, level, distances, frightened) -> Position:
+    def choose_next_cell(
+            self,
+            level: Level,
+            distances: dict[Position, int],
+            frightened: bool,
+            ) -> Position | None:
         """Choose a legal neighboring cell to chase or flee."""
         if frightened:
             return super().choose_next_cell(level, distances, frightened)

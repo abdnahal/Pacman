@@ -102,7 +102,7 @@ class Game:
                            for i, spawn in enumerate(self.level.ghost_spawn)]
             self.player = Player(*self.level.player_spawn,
                                  self.tile_size / PLAYER_SECONDS_PER_TILE,
-                                 maze)
+                                 maze, self.level)
         except MazeError as exc:
             self.error_message = str(exc)
             self.state = STATE_MENU
